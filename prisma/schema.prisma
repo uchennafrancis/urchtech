@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id               String   @id @default(cuid())
+  willowPropertyId String   @unique
+  title            String
+  description      String?
+  location         String
+  city             String
+  state            String
+  propertyType     String
+  bedrooms         Int?
+  bathrooms        Int?
+  floorArea        Float?
+  yearBuilt        Int?
+  valuationNaira   BigInt?
+  uosScore         Int?     @default(0)
+  isVerified       Boolean  @default(false)
+
+  // Blockchain fields
+  nftTokenId       String?  @unique
+  txHash           String?
+  metadataURI      String?
+  ownerWallet      String?
+  fractionalAddr   String?
+
+  // Relations
+  landlordId       String?
+  landlord         User?    @relation("LandlordProperties", fields: [landlordId], references: [id])
+  leases           Lease[]
+  bookings         Booking[]
+  improvements     Improvement[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("properties")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  role          UserRole  @default(TENANT)
+  walletAddress String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  landlordProperties Property[] @relation("LandlordProperties")
+  tenantLeases       Lease[]    @relation("TenantLeases")
+  landlordLeases     Lease[]    @relation("LandlordLeases")
+  investments        Investment[]
+  bookings           Booking[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  LANDLORD
+  TENANT
+  INVESTOR
+  DEVELOPER
+  INSPECTOR
+}
+
+model Lease {
+  id                  String      @id @default(cuid())
+  propertyId          String
+  property            Property    @relation(fields: [propertyId], references: [id])
+  landlordId          String
+  landlord            User        @relation("LandlordLeases", fields: [landlordId], references: [id])
+  tenantId            String
+  tenant              User        @relation("TenantLeases", fields: [tenantId], references: [id])
+  monthlyRentUSDC     BigInt
+  depositUSDC         BigInt
+  durationMonths      Int
+  status              LeaseStatus @default(PENDING)
+
+  // Blockchain fields
+  contractAddress     String?     @unique
+  deployTxHash        String?
+  activateTxHash      String?
+  nftTokenId          String?
+
+  payments            Payment[]
+  startDate           DateTime?
+  endDate             DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@map("leases")
+}
+
+enum LeaseStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  leaseId    String
+  lease      Lease    @relation(fields: [leaseId], references: [id])
+  amountUSDC BigInt
+  txHash     String?
+  paidAt     DateTime @default(now())
+
+  @@map("payments")
+}
+
+model Booking {
+  id               String        @id @default(cuid())
+  propertyId       String
+  property         Property      @relation(fields: [propertyId], references: [id])
+  guestId          String
+  guest            User          @relation(fields: [guestId], references: [id])
+  totalUSDC        BigInt
+  checkinDate      DateTime
+  checkoutDate     DateTime
+  status           BookingStatus @default(PENDING)
+  bookingReference String        @unique
+
+  // Blockchain fields
+  bookingId        String?       @unique
+  escrowTxHash     String?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@map("bookings")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  REFUNDED
+  CANCELLED
+}
+
+model Investment {
+  id             String   @id @default(cuid())
+  investorId     String
+  investor       User     @relation(fields: [investorId], references: [id])
+  poolAddress    String
+  usdcAmount     BigInt
+  poolTokens     BigInt
+  txHash         String?
+  createdAt      DateTime @default(now())
+
+  @@map("investments")
+}
+
+model Improvement {
+  id              String   @id @default(cuid())
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id])
+  improvementType String
+  costNaira       BigInt
+  valueImpact     BigInt
+  uosScoreBefore  Int
+  uosScoreAfter   Int
+  evidenceIPFS    String?
+  txHash          String?
+  certifiedBy     String?
+  completedAt     DateTime @default(now())
+
+  @@map("improvements")
+}
