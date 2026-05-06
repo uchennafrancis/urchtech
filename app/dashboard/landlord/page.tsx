@@ -39,6 +39,42 @@ export default function LandlordDashboard() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
 
+  const [leaseForm, setLeaseForm]       = useState({ propertyId: "", tenantAddress: "", monthlyRent: "", deposit: "", duration: "12" });
+  const [showLeaseForm, setShowLeaseForm] = useState(false);
+  const [deployingLease, setDeployingLease]   = useState(false);
+  const [leaseResult, setLeaseResult]         = useState<{ contractAddress: string; txHash: string } | null>(null);
+  const [leaseError, setLeaseError]           = useState<string | null>(null);
+
+  const handleDeployLease = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeployingLease(true);
+    setLeaseResult(null);
+    setLeaseError(null);
+    try {
+      const selectedProp = properties.find(p => p.id === leaseForm.propertyId);
+      const res = await fetch("/api/blockchain/create-lease", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          landlordAddress: address,
+          tenantAddress:   leaseForm.tenantAddress,
+          nftTokenId:      selectedProp?.nftTokenId ?? "0",
+          monthlyRentUSDC: leaseForm.monthlyRent,
+          depositUSDC:     leaseForm.deposit,
+          durationMonths:  Number(leaseForm.duration),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Deploy failed");
+      setLeaseResult(data);
+      setShowLeaseForm(false);
+    } catch (err) {
+      setLeaseError(String(err));
+    } finally {
+      setDeployingLease(false);
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
@@ -250,9 +286,77 @@ export default function LandlordDashboard() {
                         </div>
                       ))
                     )}
-                    <button className="w-full bg-[rgba(130,71,229,0.15)] hover:bg-[rgba(130,71,229,0.25)] text-[#a970ff] py-2 rounded-lg text-sm transition-colors">
-                      Deploy New Lease
-                    </button>
+
+                    {leaseResult && (
+                      <div className="bg-[rgba(61,186,120,0.08)] border border-[rgba(61,186,120,0.2)] rounded-lg p-3 space-y-1 text-sm">
+                        <div className="text-[#3DBA78] font-medium">✓ Lease deployed</div>
+                        <div className="font-mono text-[#7A9175] text-xs break-all">{leaseResult.contractAddress}</div>
+                      </div>
+                    )}
+
+                    {!showLeaseForm ? (
+                      <button onClick={() => setShowLeaseForm(true)}
+                        className="w-full bg-[rgba(130,71,229,0.15)] hover:bg-[rgba(130,71,229,0.25)] text-[#a970ff] py-2 rounded-lg text-sm transition-colors">
+                        Deploy New Lease
+                      </button>
+                    ) : (
+                      <form onSubmit={handleDeployLease} className="space-y-3 pt-1">
+                        {leaseError && (
+                          <div className="text-[#E05252] text-xs bg-[rgba(224,82,82,0.08)] rounded-lg p-2">{leaseError}</div>
+                        )}
+                        <div>
+                          <label className="text-[#7A9175] text-xs mb-1 block">Property</label>
+                          <select value={leaseForm.propertyId}
+                            onChange={e => setLeaseForm(f => ({ ...f, propertyId: e.target.value }))}
+                            className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-3 py-2 text-[#EDE9E1] text-sm focus:outline-none focus:border-[#C9A84C]">
+                            <option value="">— select —</option>
+                            {properties.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[#7A9175] text-xs mb-1 block">Tenant Wallet Address</label>
+                          <input value={leaseForm.tenantAddress}
+                            onChange={e => setLeaseForm(f => ({ ...f, tenantAddress: e.target.value }))}
+                            placeholder="0x..."
+                            className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-3 py-2 text-[#EDE9E1] placeholder-[#7A9175] text-sm font-mono focus:outline-none focus:border-[#C9A84C]" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[#7A9175] text-xs mb-1 block">Monthly Rent (USDC)</label>
+                            <input type="number" value={leaseForm.monthlyRent}
+                              onChange={e => setLeaseForm(f => ({ ...f, monthlyRent: e.target.value }))}
+                              placeholder="500"
+                              className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-3 py-2 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                          </div>
+                          <div>
+                            <label className="text-[#7A9175] text-xs mb-1 block">Deposit (USDC)</label>
+                            <input type="number" value={leaseForm.deposit}
+                              onChange={e => setLeaseForm(f => ({ ...f, deposit: e.target.value }))}
+                              placeholder="1000"
+                              className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-3 py-2 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[#7A9175] text-xs mb-1 block">Duration (months)</label>
+                          <select value={leaseForm.duration}
+                            onChange={e => setLeaseForm(f => ({ ...f, duration: e.target.value }))}
+                            className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-3 py-2 text-[#EDE9E1] text-sm focus:outline-none focus:border-[#C9A84C]">
+                            {["6","12","18","24","36"].map(m => <option key={m} value={m}>{m} months</option>)}
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="submit"
+                            disabled={deployingLease || !leaseForm.propertyId || !leaseForm.tenantAddress || !leaseForm.monthlyRent || !leaseForm.deposit}
+                            className="flex-1 bg-[#a970ff] hover:bg-[#b882ff] disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg text-sm font-medium transition-colors">
+                            {deployingLease ? "Deploying…" : "Deploy Lease"}
+                          </button>
+                          <button type="button" onClick={() => { setShowLeaseForm(false); setLeaseError(null); }}
+                            className="px-4 bg-[rgba(122,145,117,0.1)] hover:bg-[rgba(122,145,117,0.2)] text-[#7A9175] rounded-lg text-sm transition-colors">
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
                 </div>
               </>

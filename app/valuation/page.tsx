@@ -17,33 +17,29 @@ interface ValuationResult {
 
 export default function ValuationPage() {
   const [form, setForm] = useState({ address: "", type: "APARTMENT", beds: "3", sqm: "", condition: "GOOD" });
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ValuationResult | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [result, setResult]     = useState<ValuationResult | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setResult({
-      estimate: "₦285M",
-      low: "₦260M",
-      high: "₦310M",
-      rentalYield: "9.2%",
-      capitalGrowth: "+12.4% YoY",
-      confidenceScore: 87,
-      comparables: [
-        { address: "Lekki Phase 1, Block 4",       price: "₦278M", sqm: 195, date: "Mar 2026" },
-        { address: "Lekki Phase 1, Admiralty Way", price: "₦295M", sqm: 210, date: "Feb 2026" },
-        { address: "Lekki Phase 1, Chevron Drive", price: "₦270M", sqm: 188, date: "Jan 2026" },
-      ],
-      factors: [
-        { label: "Location premium",     impact: "positive", detail: "Lekki Phase 1 commands 18% above Lagos average" },
-        { label: "Free Zone proximity",  impact: "positive", detail: "Lekki Free Zone within 5km drives demand +14%" },
-        { label: "Building age",         impact: "neutral",  detail: "2019 construction — within optimal age band" },
-        { label: "Flood zone",           impact: "negative", detail: "Marginal risk — minor discount applied (-2%)" },
-      ],
-    });
-    setLoading(false);
+    setResult(null);
+    setApiError(null);
+    try {
+      const res  = await fetch("/api/valuation", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Valuation failed");
+      setResult(data as ValuationResult);
+    } catch (err) {
+      setApiError(String(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,6 +105,12 @@ export default function ValuationPage() {
             {loading ? "Analysing with Claude AI..." : "Get Instant Valuation"}
           </button>
         </form>
+
+        {apiError && (
+          <div className="bg-[rgba(224,82,82,0.1)] border border-[rgba(224,82,82,0.3)] rounded-xl p-4 text-[#E05252] text-sm">
+            {apiError}
+          </div>
+        )}
 
         {/* Result */}
         {result && (

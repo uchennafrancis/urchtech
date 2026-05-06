@@ -42,6 +42,40 @@ export default function DeveloperDashboard() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
 
+  const [tokenForm, setTokenForm]     = useState({ projectId: "", tokenName: "", symbol: "", totalShares: "1000000" });
+  const [tokenizing, setTokenizing]   = useState(false);
+  const [tokenResult, setTokenResult] = useState<{ fractionalAddress: string; txHash: string } | null>(null);
+  const [tokenError, setTokenError]   = useState<string | null>(null);
+
+  const handleTokenise = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenizing(true);
+    setTokenResult(null);
+    setTokenError(null);
+    try {
+      const res  = await fetch("/api/blockchain/create-fractional", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          nftTokenId:       "0",
+          totalShares:      tokenForm.totalShares,
+          tokenName:        tokenForm.tokenName,
+          tokenSymbol:      tokenForm.symbol,
+          founderAddresses: [],
+          allocations:      [],
+          propertyId:       null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Deploy failed");
+      setTokenResult(data);
+    } catch (err) {
+      setTokenError(String(err));
+    } finally {
+      setTokenizing(false);
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
   }, [status, router]);
@@ -246,30 +280,70 @@ export default function DeveloperDashboard() {
               </div>
               {projects.length === 0 ? (
                 <p className="text-[#7A9175] text-sm">Create a project first before tokenising.</p>
+              ) : tokenResult ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-[#3DBA78]">
+                    <span className="text-xl">✓</span>
+                    <span className="font-medium">Fractional contract deployed</span>
+                  </div>
+                  <div className="bg-[#0C1410] rounded-lg p-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-[#7A9175]">Contract</span>
+                      <span className="font-mono text-[#a970ff] text-xs">{tokenResult.fractionalAddress}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#7A9175]">Tx Hash</span>
+                      <span className="font-mono text-[#7A9175] text-xs">{tokenResult.txHash}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => { setTokenResult(null); setTokenForm({ projectId: "", tokenName: "", symbol: "", totalShares: "1000000" }); }}
+                    className="text-[#C9A84C] text-sm hover:underline">
+                    Tokenise another project
+                  </button>
+                </div>
               ) : (
-                <form className="space-y-4" onSubmit={e => e.preventDefault()}>
+                <form className="space-y-4" onSubmit={handleTokenise}>
+                  {tokenError && (
+                    <div className="bg-[rgba(224,82,82,0.1)] border border-[rgba(224,82,82,0.3)] rounded-lg p-3 text-[#E05252] text-sm">
+                      {tokenError}
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-[#7A9175] text-sm">Select Project</label>
-                    <select className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] text-sm focus:outline-none focus:border-[#C9A84C]">
+                    <select value={tokenForm.projectId}
+                      onChange={e => setTokenForm(f => ({ ...f, projectId: e.target.value }))}
+                      className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] text-sm focus:outline-none focus:border-[#C9A84C]">
+                      <option value="">— select —</option>
                       {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[#7A9175] text-sm">Token Name</label>
-                      <input placeholder="e.g. Skyline Phase 1" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                      <input value={tokenForm.tokenName}
+                        onChange={e => setTokenForm(f => ({ ...f, tokenName: e.target.value }))}
+                        placeholder="e.g. Skyline Phase 1"
+                        className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[#7A9175] text-sm">Symbol</label>
-                      <input placeholder="e.g. SKY1" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                      <input value={tokenForm.symbol}
+                        onChange={e => setTokenForm(f => ({ ...f, symbol: e.target.value }))}
+                        placeholder="e.g. SKY1"
+                        className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[#7A9175] text-sm">Total Shares</label>
-                    <input type="number" placeholder="1000000" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                    <input type="number" value={tokenForm.totalShares}
+                      onChange={e => setTokenForm(f => ({ ...f, totalShares: e.target.value }))}
+                      placeholder="1000000"
+                      className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
                   </div>
-                  <button type="submit" className="w-full bg-[#C9A84C] hover:bg-[#d4b560] text-[#060C07] py-3 rounded-xl font-bold transition-colors">
-                    Deploy Fractional Contract
+                  <button type="submit"
+                    disabled={tokenizing || !tokenForm.projectId || !tokenForm.tokenName || !tokenForm.symbol}
+                    className="w-full bg-[#C9A84C] hover:bg-[#d4b560] disabled:opacity-50 disabled:cursor-not-allowed text-[#060C07] py-3 rounded-xl font-bold transition-colors">
+                    {tokenizing ? "Deploying contract…" : "Deploy Fractional Contract"}
                   </button>
                 </form>
               )}
