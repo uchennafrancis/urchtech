@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFractionalFactoryContract } from "@/lib/blockchain";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireAuth("LANDLORD");
+  if (error) return error;
+
   try {
     const {
       nftTokenId, totalShares, tokenName, tokenSymbol,
       founderAddresses, allocations, propertyId,
     } = await req.json();
+
+    if (!nftTokenId || !totalShares || !tokenName || !tokenSymbol) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (propertyId) {
+      const property = await prisma.property.findFirst({ where: { id: propertyId, ownerId: userId } });
+      if (!property) return NextResponse.json({ error: "Property not found or not owned by you" }, { status: 403 });
+    }
 
     const factory = getFractionalFactoryContract();
     const tx      = await factory.createFractionalProperty(

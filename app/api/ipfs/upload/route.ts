@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadJSONToIPFS, uploadFileToIPFS, buildPropertyMetadata } from "@/lib/pinata";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   try {
     const contentType = req.headers.get("content-type") || "";
 

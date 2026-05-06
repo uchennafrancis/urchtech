@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPropertyNFTContract, getFractionalFactoryContract, getLeaseFactoryContract } from "@/lib/blockchain";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function GET(_req: NextRequest, { params }: { params: { address: string } }) {
+  const { error } = await requireAuth();
+  if (error) return error;
+
   try {
     const address = params.address;
 

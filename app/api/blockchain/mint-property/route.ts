@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPropertyNFTContract } from "@/lib/blockchain";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireAuth("LANDLORD");
+  if (error) return error;
+
   try {
     const { willowPropertyId, metadataURI, ownerAddress, valuation, location } = await req.json();
 
     if (!willowPropertyId || !metadataURI || !ownerAddress) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    // Verify the property belongs to the authenticated user
+    const property = await prisma.property.findFirst({ where: { id: willowPropertyId, ownerId: userId } });
+    if (!property) return NextResponse.json({ error: "Property not found or not owned by you" }, { status: 403 });
 
     const contract = getPropertyNFTContract();
     const tx       = await contract.mintProperty(

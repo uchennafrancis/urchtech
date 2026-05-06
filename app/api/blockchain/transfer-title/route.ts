@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPropertyNFTContract, getTitleRegistryContract } from "@/lib/blockchain";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error } = await requireAuth("ADMIN");
+  if (error) return error;
+
   try {
     const { nftTokenId, newOwnerAddress, salePrice, documentIPFSHashes } = await req.json();
 

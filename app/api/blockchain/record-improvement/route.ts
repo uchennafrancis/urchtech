@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUOSRegistryContract } from "@/lib/blockchain";
 import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireAuth("LANDLORD");
+  if (error) return error;
+
   try {
     const {
       nftTokenId, improvType, cost, valueImpact,

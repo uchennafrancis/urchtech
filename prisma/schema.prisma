@@ -53,13 +53,15 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  company      Company?     @relation("CompanyOwner", fields: [companyId], references: [id])
-  properties   Property[]   @relation("PropertyOwner")
-  leads        Lead[]       @relation("AgentLeads")
-  investments  Investment[]
-  unitBuyers   Unit[]       @relation("UnitBuyer")
+  accounts        Account[]
+  sessions        Session[]
+  company         Company?     @relation("CompanyOwner", fields: [companyId], references: [id])
+  properties      Property[]   @relation("PropertyOwner")
+  leads           Lead[]       @relation("AgentLeads")
+  investments     Investment[]
+  unitBuyers      Unit[]       @relation("UnitBuyer")
+  landlordLeases  Lease[]      @relation("LandlordLeases")
+  tenantLeases    Lease[]      @relation("TenantLeases")
 
   @@map("users")
 }
@@ -127,6 +129,7 @@ model Property {
   improvements Improvement[]
   valuations   Valuation[]
   leads        Lead[]
+  leases       Lease[]
 
   @@map("properties")
 }
@@ -341,4 +344,28 @@ model Investment {
   investor User @relation(fields: [investorId], references: [id])
 
   @@map("investments")
+}
+
+model Lease {
+  id              String   @id @default(cuid())
+  propertyId      String
+  landlordId      String
+  tenantId        String?
+  monthlyRentUSDC BigInt
+  depositUSDC     BigInt
+  durationMonths  Int
+  contractAddress String?  @unique
+  deployTxHash    String?
+  status          String   @default("PENDING")
+  startedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+  landlord User     @relation("LandlordLeases", fields: [landlordId], references: [id])
+  tenant   User?    @relation("TenantLeases",   fields: [tenantId],   references: [id])
+
+  @@index([landlordId])
+  @@index([propertyId])
+  @@map("leases")
 }

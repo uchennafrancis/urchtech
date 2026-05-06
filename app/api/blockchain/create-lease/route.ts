@@ -2,14 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLeaseFactoryContract } from "@/lib/blockchain";
 import { prisma } from "@/lib/prisma";
 import { ethers } from "ethers";
+import { requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireAuth("LANDLORD");
+  if (error) return error;
+
   try {
     const {
       landlordAddress, tenantAddress, nftTokenId,
       monthlyRentUSDC, depositUSDC, durationMonths,
       leaseId,
     } = await req.json();
+
+    if (!landlordAddress || !tenantAddress || !nftTokenId || !monthlyRentUSDC || !depositUSDC || !durationMonths) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Verify the lease belongs to the authenticated user
+    if (leaseId) {
+      const lease = await prisma.lease.findFirst({ where: { id: leaseId, landlordId: userId } });
+      if (!lease) return NextResponse.json({ error: "Lease not found or not owned by you" }, { status: 403 });
+    }
 
     const factory = getLeaseFactoryContract();
     const tx      = await factory.deployLease(

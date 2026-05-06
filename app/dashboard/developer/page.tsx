@@ -1,177 +1,295 @@
 "use client";
 
-import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { WalletButton } from "@/components/web3/WalletButton";
-import { formatNairaDisplay, formatUSDCDisplay, polygonscanLink, truncateAddr } from "@/lib/web3";
+import { formatNairaDisplay, truncateAddr } from "@/lib/web3";
 import Link from "next/link";
 
-const MOCK_PROJECTS = [
-  {
-    id: "proj-1", name: "Skyline Residences Phase 1", location: "Lekki Phase 1, Lagos",
-    units: 24, unitsSold: 18, unitsOnChain: 12,
-    totalValueNaira: 2_400_000_000_000n, usdcReceivedOnChain: 800_000_000_000n,
-    nftTokenId: "5", fractionalAddr: "0xFractionalSkyline",
-  },
-];
+interface Unit {
+  id: string;
+  unitNumber: string;
+  type: string;
+  bedrooms: number;
+  sqm: number;
+  price: string;
+  status: string;
+  buyerId: string | null;
+}
 
-const MOCK_SALES = [
-  { unit: "Unit 4A", buyer: "0xBuyerABC123def456", priceNaira: 85_000_000_000n, txHash: "0xTx001", date: "2024-03-15" },
-  { unit: "Unit 7B", buyer: "0xBuyerXYZ789uvw012", priceNaira: 92_000_000_000n, txHash: "0xTx002", date: "2024-04-01" },
-];
+interface Project {
+  id: string;
+  name: string;
+  location: string;
+  totalUnits: number;
+  soldUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  constructionPct: number;
+  status: string;
+  priceFrom: string;
+  priceTo: string;
+  units: Unit[];
+}
 
 export default function DeveloperDashboard() {
-  const { isConnected } = useAccount();
-  const [activeTab, setActiveTab] = useState<"projects" | "sales" | "tokenise">("projects");
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<"projects" | "units" | "tokenise">("projects");
+  const [projects, setProjects]   = useState<Project[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login");
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/projects")
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(setProjects)
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [status]);
+
+  const allUnits     = projects.flatMap(p => p.units);
+  const soldUnits    = allUnits.filter(u => u.status === "SOLD");
+  const totalRevenue = soldUnits.reduce((s, u) => s + BigInt(u.price), 0n);
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="min-h-screen bg-[#060C07] flex items-center justify-center">
+        <div className="text-[#C9A84C] font-playfair text-xl animate-pulse">Loading projects…</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-[#060C07] text-[#EDE9E1]">
+      <header className="border-b border-[rgba(201,168,76,0.12)] px-6 py-4 flex items-center justify-between bg-[#0C1410]">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-willow-400 font-bold text-lg">Willow</Link>
-          <span className="text-white/30">/</span>
-          <span className="text-white/70">Developer Dashboard</span>
+          <Link href="/" className="font-playfair text-[#C9A84C] font-bold text-lg tracking-widest">WILLOW</Link>
+          <span className="text-[#7A9175]">/</span>
+          <span className="text-[#7A9175] text-sm">Developer Dashboard</span>
         </div>
         <WalletButton />
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <div>
+          <h1 className="font-playfair text-3xl text-[#EDE9E1]">
+            Welcome back, {session?.user?.name?.split(" ")[0] ?? "Developer"}
+          </h1>
+          <p className="text-[#7A9175] text-sm mt-1">Your development projects and sales pipeline.</p>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Active Projects",        value: "1",   icon: "🏗️" },
-            { label: "Units Sold",             value: "18",  icon: "✅" },
-            { label: "On-Chain Transactions",  value: "12",  icon: "🔗" },
-            { label: "USDC Received On-Chain", value: "$800K", icon: "💰" },
-          ].map((s) => (
-            <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="text-3xl mb-2">{s.icon}</div>
-              <div className="text-2xl font-bold">{s.value}</div>
-              <div className="text-white/50 text-sm">{s.label}</div>
+            { label: "Projects",     value: String(projects.length),  icon: "🏗️" },
+            { label: "Total Units",  value: String(allUnits.length),  icon: "🏢" },
+            { label: "Units Sold",   value: String(soldUnits.length), icon: "✅" },
+            { label: "Revenue",      value: formatNairaDisplay(totalRevenue), icon: "💰" },
+          ].map(s => (
+            <div key={s.label} className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-5">
+              <div className="text-2xl mb-2">{s.icon}</div>
+              <div className="font-playfair text-3xl text-[#C9A84C] font-bold">{s.value}</div>
+              <div className="text-[#7A9175] text-xs mt-1 uppercase tracking-wider">{s.label}</div>
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2 border-b border-white/10">
+        <div className="flex gap-1 border-b border-[rgba(201,168,76,0.12)]">
           {[
-            { key: "projects",  label: "My Projects" },
-            { key: "sales",     label: "On-Chain Sales" },
-            { key: "tokenise",  label: "🪙 Tokenise Project" },
-          ].map((tab) => (
+            { key: "projects",  label: "Projects" },
+            { key: "units",     label: "Unit Matrix" },
+            { key: "tokenise",  label: "🔗 Tokenise" },
+          ].map(tab => (
             <button key={tab.key}
-              onClick={() => setActiveTab(tab.key as "projects" | "sales" | "tokenise")}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.key ? "border-willow-400 text-willow-400" : "border-transparent text-white/50 hover:text-white"
+              onClick={() => setActiveTab(tab.key as typeof activeTab)}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? "border-[#C9A84C] text-[#C9A84C]"
+                  : "border-transparent text-[#7A9175] hover:text-[#EDE9E1]"
               }`}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        {activeTab === "projects" && (
-          <div className="space-y-6">
-            {MOCK_PROJECTS.map((p) => (
-              <div key={p.id} className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold">{p.name}</h3>
-                    <p className="text-white/60 text-sm mt-1">📍 {p.location}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="bg-polygon-purple/30 text-polygon-light px-2 py-1 rounded text-xs font-mono">NFT #{p.nftTokenId}</span>
-                    <a href={polygonscanLink("address", p.fractionalAddr)} target="_blank" rel="noopener noreferrer"
-                      className="bg-polygon-purple/20 text-polygon-light px-2 py-1 rounded text-xs hover:bg-polygon-purple/30">
-                      Tokens ↗
-                    </a>
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="bg-white/5 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold">{p.unitsSold}/{p.units}</div>
-                    <div className="text-white/50 text-sm">Units Sold</div>
-                    <div className="bg-white/10 rounded-full h-2 mt-2">
-                      <div className="bg-willow-500 h-full rounded-full" style={{ width: `${(p.unitsSold / p.units) * 100}%` }} />
-                    </div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold">{formatNairaDisplay(p.totalValueNaira)}</div>
-                    <div className="text-white/50 text-sm">Total Project Value</div>
-                  </div>
-                  <div className="bg-green-900/20 border border-green-800 rounded-xl p-4 text-center">
-                    <div className="text-3xl font-bold text-green-400">{formatUSDCDisplay(p.usdcReceivedOnChain)}</div>
-                    <div className="text-green-600 text-sm">USDC On-Chain Revenue</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+        {error && (
+          <div className="bg-[rgba(224,82,82,0.1)] border border-[rgba(224,82,82,0.3)] rounded-xl p-4 text-[#E05252] text-sm">
+            Failed to load projects: {error}
           </div>
         )}
 
-        {activeTab === "sales" && (
-          <div className="space-y-4">
-            <h3 className="font-bold text-lg">Confirmed On-Chain Sales</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-white/50 border-b border-white/10">
-                    <th className="text-left py-3 px-4">Unit</th>
-                    <th className="text-left py-3 px-4">Buyer Wallet</th>
-                    <th className="text-left py-3 px-4">Price</th>
-                    <th className="text-left py-3 px-4">Date</th>
-                    <th className="text-left py-3 px-4">Tx</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MOCK_SALES.map((s) => (
-                    <tr key={s.txHash} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="py-3 px-4 font-medium">{s.unit}</td>
-                      <td className="py-3 px-4 font-mono text-white/60">{truncateAddr(s.buyer)}</td>
-                      <td className="py-3 px-4 text-willow-400">{formatNairaDisplay(s.priceNaira)}</td>
-                      <td className="py-3 px-4 text-white/60">{s.date}</td>
-                      <td className="py-3 px-4">
-                        <a href={polygonscanLink("tx", s.txHash)} target="_blank" rel="noopener noreferrer"
-                          className="text-polygon-light hover:underline text-xs">{truncateAddr(s.txHash)} ↗</a>
-                      </td>
+        {activeTab === "projects" && (
+          <div className="space-y-5">
+            {projects.length === 0 ? (
+              <div className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-12 text-center space-y-3">
+                <div className="text-4xl">🏗️</div>
+                <p className="text-[#7A9175]">No projects yet. Create your first development project.</p>
+              </div>
+            ) : (
+              projects.map(p => {
+                const soldPct = p.totalUnits > 0 ? Math.round((p.soldUnits / p.totalUnits) * 100) : 0;
+                return (
+                  <div key={p.id} className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-6 space-y-5">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-playfair text-xl text-[#EDE9E1]">{p.name}</h3>
+                        <p className="text-[#7A9175] text-sm">📍 {p.location}</p>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
+                        p.status === "SALES"        ? "bg-[rgba(201,168,76,0.15)] text-[#C9A84C]" :
+                        p.status === "CONSTRUCTION" ? "bg-[rgba(130,71,229,0.15)] text-[#a970ff]" :
+                        p.status === "COMPLETE"     ? "bg-[rgba(61,186,120,0.12)] text-[#3DBA78]" :
+                                                      "bg-[rgba(122,145,117,0.1)] text-[#7A9175]"
+                      }`}>{p.status}</span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { label: "Total",     value: p.totalUnits },
+                        { label: "Sold",      value: p.soldUnits },
+                        { label: "Available", value: p.availableUnits },
+                        { label: "Reserved",  value: p.reservedUnits },
+                      ].map(s => (
+                        <div key={s.label} className="bg-[#0C1410] rounded-lg p-3 text-center">
+                          <div className="font-playfair text-xl text-[#C9A84C] font-bold">{s.value}</div>
+                          <div className="text-[#7A9175] text-xs">{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs text-[#7A9175]">
+                        <span>Sales Progress</span><span>{soldPct}%</span>
+                      </div>
+                      <div className="bg-[rgba(255,255,255,0.06)] rounded-full h-2">
+                        <div className="h-2 rounded-full bg-[#C9A84C]" style={{ width: `${soldPct}%` }} />
+                      </div>
+                    </div>
+
+                    {p.constructionPct > 0 && p.constructionPct < 100 && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs text-[#7A9175]">
+                          <span>Construction</span><span>{p.constructionPct}%</span>
+                        </div>
+                        <div className="bg-[rgba(255,255,255,0.06)] rounded-full h-2">
+                          <div className="h-2 rounded-full bg-[#a970ff]" style={{ width: `${p.constructionPct}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#7A9175]">Price range</span>
+                      <span className="text-[#EDE9E1]">
+                        {formatNairaDisplay(BigInt(p.priceFrom))} – {formatNairaDisplay(BigInt(p.priceTo))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === "units" && (
+          <div>
+            {allUnits.length === 0 ? (
+              <div className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-10 text-center text-[#7A9175]">
+                No units found. Add units to your projects.
+              </div>
+            ) : (
+              <div className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[rgba(201,168,76,0.12)]">
+                    <tr>
+                      {["Unit", "Type", "Beds", "Sqm", "Price", "Status"].map(h => (
+                        <th key={h} className="text-left px-4 py-3 text-[#7A9175] text-xs uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-[rgba(201,168,76,0.06)]">
+                    {allUnits.map(u => (
+                      <tr key={u.id} className="hover:bg-[rgba(201,168,76,0.03)] transition-colors">
+                        <td className="px-4 py-3 font-mono text-[#EDE9E1]">{u.unitNumber}</td>
+                        <td className="px-4 py-3 text-[#7A9175]">{u.type}</td>
+                        <td className="px-4 py-3 text-[#7A9175]">{u.bedrooms}</td>
+                        <td className="px-4 py-3 text-[#7A9175]">{u.sqm}</td>
+                        <td className="px-4 py-3 text-[#C9A84C] font-medium">{formatNairaDisplay(BigInt(u.price))}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            u.status === "SOLD"     ? "bg-[rgba(61,186,120,0.12)] text-[#3DBA78]" :
+                            u.status === "RESERVED" ? "bg-[rgba(251,191,36,0.1)] text-[#fbbf24]" :
+                                                      "bg-[rgba(122,145,117,0.1)] text-[#7A9175]"
+                          }`}>{u.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === "tokenise" && (
-          <div className="max-w-lg space-y-6">
-            <div>
-              <h3 className="text-xl font-bold">Tokenise a Project</h3>
-              <p className="text-white/60 text-sm mt-1">
-                Create fractional ERC-20 tokens for your project, enabling crowd-investment before completion.
-              </p>
-            </div>
-            {!isConnected ? (
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center space-y-3">
-                <p className="text-white/60">Connect your wallet to tokenise a project</p>
-                <WalletButton />
+          <div className="space-y-4">
+            <div className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-6 space-y-5">
+              <div>
+                <h3 className="font-playfair text-xl text-[#EDE9E1]">Tokenise a Project</h3>
+                <p className="text-[#7A9175] text-sm mt-1">Deploy fractional ERC-20 tokens for a project to enable on-chain investment.</p>
               </div>
-            ) : (
-              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-                {[
-                  { label: "Property NFT Token ID", id: "tokenId",    type: "number", placeholder: "1" },
-                  { label: "Total Shares",          id: "shares",     type: "number", placeholder: "1000000" },
-                  { label: "Token Name",            id: "tokenName",  type: "text",   placeholder: "Skyline Residences Token" },
-                  { label: "Token Symbol",          id: "tokenSym",   type: "text",   placeholder: "SRT" },
-                ].map((f) => (
-                  <div key={f.id} className="space-y-1">
-                    <label className="text-sm text-white/70">{f.label}</label>
-                    <input type={f.type} placeholder={f.placeholder}
-                      className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-willow-500" />
+              {projects.length === 0 ? (
+                <p className="text-[#7A9175] text-sm">Create a project first before tokenising.</p>
+              ) : (
+                <form className="space-y-4" onSubmit={e => e.preventDefault()}>
+                  <div className="space-y-1.5">
+                    <label className="text-[#7A9175] text-sm">Select Project</label>
+                    <select className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] text-sm focus:outline-none focus:border-[#C9A84C]">
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
                   </div>
-                ))}
-                <button type="submit"
-                  className="w-full bg-polygon-purple hover:bg-polygon-light text-white py-3 rounded-xl font-semibold transition-colors">
-                  Deploy Fractional Token Contract
-                </button>
-              </form>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[#7A9175] text-sm">Token Name</label>
+                      <input placeholder="e.g. Skyline Phase 1" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[#7A9175] text-sm">Symbol</label>
+                      <input placeholder="e.g. SKY1" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[#7A9175] text-sm">Total Shares</label>
+                    <input type="number" placeholder="1000000" className="w-full bg-[#0C1410] border border-[rgba(201,168,76,0.15)] rounded-lg px-4 py-3 text-[#EDE9E1] placeholder-[#7A9175] text-sm focus:outline-none focus:border-[#C9A84C]" />
+                  </div>
+                  <button type="submit" className="w-full bg-[#C9A84C] hover:bg-[#d4b560] text-[#060C07] py-3 rounded-xl font-bold transition-colors">
+                    Deploy Fractional Contract
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {soldUnits.length > 0 && (
+              <div className="bg-[#111A12] border border-[rgba(201,168,76,0.12)] rounded-xl p-5 space-y-3">
+                <h3 className="text-[#EDE9E1] font-medium">On-Chain Sales</h3>
+                <div className="space-y-2">
+                  {soldUnits.slice(0, 10).map(u => (
+                    <div key={u.id} className="flex items-center justify-between py-2 border-b border-[rgba(201,168,76,0.06)] last:border-0">
+                      <div>
+                        <div className="text-[#EDE9E1] text-sm">Unit {u.unitNumber}</div>
+                        {u.buyerId && <div className="text-[#7A9175] text-xs font-mono">{truncateAddr(u.buyerId)}</div>}
+                      </div>
+                      <span className="text-[#C9A84C] font-medium text-sm">{formatNairaDisplay(BigInt(u.price))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
