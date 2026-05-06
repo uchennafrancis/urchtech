@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -13,12 +13,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([provider, providerAccountId])
@@ -46,7 +46,7 @@ model User {
   emailVerified DateTime?
   phone         String?
   password      String?
-  role          UserRole  @default(BUYER)
+  role          String    @default("BUYER")
   companyId     String?
   avatar        String?
   walletAddress String?
@@ -55,7 +55,7 @@ model User {
 
   accounts        Account[]
   sessions        Session[]
-  company         Company?     @relation("CompanyOwner", fields: [companyId], references: [id])
+  company         Company?     @relation("CompanyOwner")
   properties      Property[]   @relation("PropertyOwner")
   leads           Lead[]       @relation("AgentLeads")
   investments     Investment[]
@@ -66,18 +66,9 @@ model User {
   @@map("users")
 }
 
-enum UserRole {
-  BUYER
-  LANDLORD
-  INVESTOR
-  AGENT
-  DEVELOPER
-  ADMIN
-}
-
 model Company {
   id         String    @id @default(cuid())
-  ownerId    String
+  ownerId    String    @unique
   name       String
   type       String
   city       String
@@ -92,37 +83,37 @@ model Company {
 }
 
 model Property {
-  id            String      @id @default(cuid())
-  ownerId       String
-  title         String
-  location      String
-  city          String
-  state         String
-  lat           Float?
-  lng           Float?
-  propertyType  String
-  bedrooms      Int?
-  bathrooms     Int?
-  sqm           Float?
-  currentValue  BigInt?
-  listingStatus String      @default("ACTIVE")
-  listingType   ListingType @default(BUY)
-  price         BigInt
-  roiPercent    Float?
-  uosScore      Int?        @default(50)
-  images        String[]
-  features      String[]
-  description   String?
-  yearBuilt     Int?
-  nftTokenId    String?
-  txHash        String?
-  metadataURI   String?
-  ownerWallet   String?
+  id             String   @id @default(cuid())
+  ownerId        String
+  title          String
+  location       String
+  city           String
+  state          String
+  lat            Float?
+  lng            Float?
+  propertyType   String
+  bedrooms       Int?
+  bathrooms      Int?
+  sqm            Float?
+  currentValue   BigInt?
+  listingStatus  String   @default("ACTIVE")
+  listingType    String   @default("BUY")
+  price          BigInt
+  roiPercent     Float?
+  uosScore       Int?     @default(50)
+  images         String   @default("[]")
+  features       String   @default("[]")
+  description    String?
+  yearBuilt      Int?
+  nftTokenId     String?
+  txHash         String?
+  metadataURI    String?
+  ownerWallet    String?
   fractionalAddr String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  owner        User         @relation("PropertyOwner", fields: [ownerId], references: [id])
+  owner        User          @relation("PropertyOwner", fields: [ownerId], references: [id])
   tenants      Tenant[]
   payments     Payment[]
   bookings     Booking[]
@@ -134,15 +125,8 @@ model Property {
   @@map("properties")
 }
 
-enum ListingType {
-  BUY
-  RENT
-  SHORTLET
-  OFFPLAN
-}
-
 model Tenant {
-  id         String       @id @default(cuid())
+  id         String   @id @default(cuid())
   propertyId String
   landlordId String
   name       String
@@ -151,32 +135,26 @@ model Tenant {
   rentAmount BigInt
   leaseStart DateTime
   leaseEnd   DateTime
-  status     TenantStatus @default(ACTIVE)
-  createdAt  DateTime     @default(now())
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
 
-  property Property @relation(fields: [propertyId], references: [id])
+  property Property  @relation(fields: [propertyId], references: [id])
   payments Payment[]
 
   @@map("tenants")
 }
 
-enum TenantStatus {
-  ACTIVE
-  EXPIRED
-  NOTICE
-}
-
 model Payment {
-  id         String        @id @default(cuid())
+  id         String    @id @default(cuid())
   propertyId String
   tenantId   String?
   amount     BigInt
-  type       PaymentType   @default(RENT)
+  type       String    @default("RENT")
   dueDate    DateTime
   paidDate   DateTime?
-  status     PaymentStatus @default(PENDING)
+  status     String    @default("PENDING")
   txHash     String?
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime  @default(now())
 
   property Property @relation(fields: [propertyId], references: [id])
   tenant   Tenant?  @relation(fields: [tenantId], references: [id])
@@ -184,46 +162,41 @@ model Payment {
   @@map("payments")
 }
 
-enum PaymentType   { RENT DEPOSIT SERVICE }
-enum PaymentStatus { PAID PENDING OVERDUE }
-
 model Booking {
-  id           String        @id @default(cuid())
-  propertyId   String
-  guestName    String
-  guestEmail   String
-  guestPhone   String?
-  checkin      DateTime
-  checkout     DateTime
-  nights       Int
-  totalPrice   BigInt
-  reference    String        @unique
-  status       BookingStatus @default(PENDING)
+  id             String   @id @default(cuid())
+  propertyId     String
+  guestName      String
+  guestEmail     String
+  guestPhone     String?
+  checkin        DateTime
+  checkout       DateTime
+  nights         Int
+  totalPrice     BigInt
+  reference      String   @unique
+  status         String   @default("PENDING")
   bookingIdChain String?
-  escrowTxHash String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  escrowTxHash   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id])
 
   @@map("bookings")
 }
 
-enum BookingStatus { PENDING CONFIRMED ACTIVE COMPLETED REFUNDED CANCELLED }
-
 model Lead {
-  id         String     @id @default(cuid())
+  id         String   @id @default(cuid())
   propertyId String?
   agentId    String?
   name       String
   email      String
   phone      String?
   message    String?
-  status     LeadStatus @default(NEW)
+  status     String   @default("NEW")
   source     String?
   unitId     String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   property Property? @relation(fields: [propertyId], references: [id])
   agent    User?     @relation("AgentLeads", fields: [agentId], references: [id])
@@ -231,17 +204,12 @@ model Lead {
   @@map("leads")
 }
 
-enum LeadStatus {
-  NEW WARM HOT CLOSING CLOSED COLD
-  VIEWING_BOOKED VIEWING_DONE OFFER_MADE RESERVED CONTRACT_SIGNED COMPLETED
-}
-
 model Valuation {
   id             String   @id @default(cuid())
   propertyId     String
   estimatedValue BigInt
   confidence     Int
-  aiReport       String?  @db.Text
+  aiReport       String?
   createdAt      DateTime @default(now())
 
   property Property @relation(fields: [propertyId], references: [id])
@@ -250,21 +218,19 @@ model Valuation {
 }
 
 model Improvement {
-  id          String            @id @default(cuid())
+  id          String   @id @default(cuid())
   propertyId  String
   type        String
   cost        BigInt
   valueImpact BigInt
-  status      ImprovementStatus @default(RECOMMENDED)
+  status      String   @default("RECOMMENDED")
   txHash      String?
-  createdAt   DateTime          @default(now())
+  createdAt   DateTime @default(now())
 
   property Property @relation(fields: [propertyId], references: [id])
 
   @@map("improvements")
 }
-
-enum ImprovementStatus { RECOMMENDED APPROVED IN_PROGRESS COMPLETE }
 
 model Neighborhood {
   id           String   @id @default(cuid())
@@ -282,21 +248,21 @@ model Neighborhood {
 }
 
 model Project {
-  id              String        @id @default(cuid())
+  id              String    @id @default(cuid())
   companyId       String
   name            String
   location        String
   totalUnits      Int
-  soldUnits       Int           @default(0)
+  soldUnits       Int       @default(0)
   availableUnits  Int
-  reservedUnits   Int           @default(0)
+  reservedUnits   Int       @default(0)
   launchDate      DateTime?
   completionDate  DateTime?
   priceFrom       BigInt
   priceTo         BigInt
-  status          ProjectStatus @default(PLANNING)
-  constructionPct Int           @default(0)
-  createdAt       DateTime      @default(now())
+  status          String    @default("PLANNING")
+  constructionPct Int       @default(0)
+  createdAt       DateTime  @default(now())
 
   company Company @relation(fields: [companyId], references: [id])
   units   Unit[]
@@ -304,10 +270,8 @@ model Project {
   @@map("projects")
 }
 
-enum ProjectStatus { PLANNING CONSTRUCTION SALES COMPLETE }
-
 model Unit {
-  id         String     @id @default(cuid())
+  id         String   @id @default(cuid())
   projectId  String
   unitNumber String
   floor      Int
@@ -316,20 +280,18 @@ model Unit {
   bathrooms  Int
   sqm        Float
   price      BigInt
-  status     UnitStatus @default(AVAILABLE)
+  status     String   @default("AVAILABLE")
   buyerId    String?
   agentId    String?
   notes      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id])
   buyer   User?   @relation("UnitBuyer", fields: [buyerId], references: [id])
 
   @@map("units")
 }
-
-enum UnitStatus { AVAILABLE RESERVED SOLD OCCUPIED MANAGEMENT }
 
 model Investment {
   id          String   @id @default(cuid())
@@ -347,19 +309,19 @@ model Investment {
 }
 
 model Lease {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   propertyId      String
   landlordId      String
   tenantId        String?
   monthlyRentUSDC BigInt
   depositUSDC     BigInt
   durationMonths  Int
-  contractAddress String?  @unique
+  contractAddress String?   @unique
   deployTxHash    String?
-  status          String   @default("PENDING")
+  status          String    @default("PENDING")
   startedAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id])
   landlord User     @relation("LandlordLeases", fields: [landlordId], references: [id])
